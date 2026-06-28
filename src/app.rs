@@ -7,7 +7,7 @@ use eframe::egui;
 use crate::categories::{self, Category, Risk};
 use crate::cleaner;
 use crate::scanner::{self, Entry};
-use crate::util::format_size;
+use crate::util::{format_size, short_path};
 
 /// Hard cap on how many items we list under one expanded category, to keep the
 /// UI responsive on enormous caches.
@@ -272,30 +272,43 @@ const GOOD: egui::Color32 = egui::Color32::from_rgb(0x22, 0xc5, 0x5e);
 const WARN: egui::Color32 = egui::Color32::from_rgb(0xf5, 0x9e, 0x0b);
 const DANGER: egui::Color32 = egui::Color32::from_rgb(0xef, 0x44, 0x44);
 const HEART: egui::Color32 = egui::Color32::from_rgb(0xdb, 0x27, 0x77);
+const GITHUB_COLOR: egui::Color32 = egui::Color32::from_rgb(0x30, 0x36, 0x3d);
 
 /// Where the in-app "Support" buttons send people. Set this to your Stripe
 /// Payment Link (https://buy.stripe.com/...) or your website's donate page.
 const SUPPORT_URL: &str = "https://hartwellbridge.com/en/clean-my-shit#support";
 
-/// A pink "Support" button that opens [`SUPPORT_URL`] in the browser.
-/// Renders nothing until a real URL is set, so a placeholder never ships.
-fn support_button(ui: &mut egui::Ui, label: &str, big: bool) {
-    if SUPPORT_URL.contains("YOUR-WEBSITE") {
-        return;
-    }
+/// The project's GitHub repository.
+const GITHUB_URL: &str = "https://github.com/frank10gm/clean-my-shit";
+
+/// A filled button that opens `url` in the browser.
+fn link_button(ui: &mut egui::Ui, label: &str, url: &str, fill: egui::Color32, big: bool) {
     let mut text = egui::RichText::new(label).color(egui::Color32::WHITE).strong();
     if big {
         text = text.size(15.0);
     }
-    let btn = egui::Button::new(text).fill(HEART);
+    let btn = egui::Button::new(text).fill(fill);
     let resp = if big {
         ui.add_sized(egui::vec2(190.0, 38.0), btn)
     } else {
         ui.add(btn)
     };
-    if resp.on_hover_text("Support development ♥").clicked() {
-        ui.ctx().open_url(egui::OpenUrl::new_tab(SUPPORT_URL));
+    if resp.clicked() {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(url));
     }
+}
+
+/// Pink "Support" button. Renders nothing until a real URL is set.
+fn support_button(ui: &mut egui::Ui, label: &str, big: bool) {
+    if SUPPORT_URL.contains("YOUR-WEBSITE") {
+        return;
+    }
+    link_button(ui, label, SUPPORT_URL, HEART, big);
+}
+
+/// Dark "GitHub" button.
+fn github_button(ui: &mut egui::Ui, label: &str, big: bool) {
+    link_button(ui, label, GITHUB_URL, GITHUB_COLOR, big);
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +336,7 @@ fn top_bar(ctx: &egui::Context, icon: &Option<egui::TextureHandle>) {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 support_button(ui, "♥ Support", false);
+                github_button(ui, "★ GitHub", false);
             });
         });
         ui.add_space(8.0);
@@ -481,6 +495,8 @@ impl App {
             );
             ui.add_space(8.0);
             support_button(ui, "♥ Support development", true);
+            ui.add_space(6.0);
+            github_button(ui, "★ Star on GitHub", true);
         });
     }
 
@@ -674,11 +690,7 @@ fn row_widget(ui: &mut egui::Ui, row: &mut Row) {
 
 /// A single file/dir line inside a preview list.
 fn entry_row(ui: &mut egui::Ui, entry: &Entry, indent: bool) {
-    let name = entry
-        .path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| entry.path.display().to_string());
+    let name = short_path(&entry.path);
     ui.horizontal(|ui| {
         if indent {
             ui.add_space(16.0);

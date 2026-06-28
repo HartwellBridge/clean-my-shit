@@ -1,8 +1,8 @@
 //! Platform-specific definitions of what can be cleaned.
 //!
-//! Every category is just a list of directory *roots* whose contents we purge.
-//! Roots are deliberately non-overlapping so sizes aren't double-counted, and
-//! we only ever target caches, temp files, logs and trash — never documents.
+//! A category is either a set of cache *roots* whose contents we purge, or a
+//! "find" rule that discovers matching directories anywhere under the home dir
+//! (e.g. `node_modules`). Either way it resolves to a list of target paths.
 
 use std::path::PathBuf;
 
@@ -10,8 +10,24 @@ use std::path::PathBuf;
 pub enum Risk {
     /// Safe to delete; regenerated automatically by the OS or apps.
     Safe,
-    /// Deletion is irreversible or may slow the next launch of something.
+    /// Deletion is irreversible, or removes regenerable project state.
     Caution,
+}
+
+/// How a category's deletable targets are produced.
+#[derive(Clone)]
+pub enum Source {
+    /// Delete the immediate contents of these directories (the dirs stay).
+    Contents(Vec<PathBuf>),
+    /// Walk `base` and match directories named `name`; each match is deleted
+    /// whole. Matches are not descended into. `sibling`, if set, requires a
+    /// file of that name next to the match (e.g. `Cargo.toml` beside `target`).
+    FindDirs {
+        base: PathBuf,
+        name: &'static str,
+        sibling: Option<&'static str>,
+        max_depth: usize,
+    },
 }
 
 #[derive(Clone)]
@@ -19,17 +35,20 @@ pub struct Category {
     pub id: &'static str,
     pub name: &'static str,
     pub description: &'static str,
-    /// Directories whose *contents* are deleted (the directory itself stays).
-    pub roots: Vec<PathBuf>,
+    pub source: Source,
     pub risk: Risk,
     pub default_on: bool,
 }
 
-/// Build the category list for the current platform. Categories with no
-/// resolvable roots are dropped.
+/// Build the category list for the current platform, dropping any that can't
+/// resolve on this machine.
 pub fn categories() -> Vec<Category> {
     let mut cats = platform_categories();
-    cats.retain(|c| !c.roots.is_empty());
+    cats.extend(dev_find_categories());
+    cats.retain(|c| match &c.source {
+        Source::Contents(roots) => !roots.is_empty(),
+        Source::FindDirs { base, .. } => base.is_dir(),
+    });
     cats
 }
 
@@ -46,7 +65,7 @@ fn home(parts: &[&str]) -> Vec<PathBuf> {
     }
 }
 
-/// Join path parts onto %LOCALAPPDATA% (Windows) / local data dir.
+/// Join path parts onto %LOCALAPPDATA% / local data dir.
 #[cfg(any(target_os = "windows", not(any(target_os = "macos", target_os = "windows"))))]
 fn local(parts: &[&str]) -> Vec<PathBuf> {
     match dirs::data_local_dir() {
@@ -64,7 +83,7 @@ fn cat(
     id: &'static str,
     name: &'static str,
     description: &'static str,
-    roots: Vec<PathBuf>,
+    source: Source,
     risk: Risk,
     default_on: bool,
 ) -> Category {
@@ -72,10 +91,59 @@ fn cat(
         id,
         name,
         description,
-        roots,
+        source,
         risk,
         default_on,
     }
+}
+
+/// Cross-platform "find scattered developer junk" categories. Off by default
+/// (Caution) — these remove regenerable project state, not just caches.
+fn dev_find_categories() -> Vec<Category> {
+    let Some(home) = dirs::home_dir() else {
+        return vec![];
+    };
+    vec![
+        cat(
+            "node_modules",
+            "node_modules folders",
+            "JavaScript dependencies anywhere under your home. Restore with `npm install`.",
+            Source::FindDirs {
+                base: home.clone(),
+                name: "node_modules",
+                sibling: None,
+                max_depth: 9,
+            },
+            Risk::Caution,
+            false,
+        ),
+        cat(
+            "rust_target",
+            "Rust build output",
+            "`target/` directories next to a Cargo.toml. Rebuild with `cargo build`.",
+            Source::FindDirs {
+                base: home.clone(),
+                name: "target",
+                sibling: Some("Cargo.toml"),
+                max_depth: 9,
+            },
+            Risk::Caution,
+            false,
+        ),
+        cat(
+            "py_cache",
+            "Python __pycache__",
+            "Compiled Python bytecode caches. Regenerated automatically.",
+            Source::FindDirs {
+                base: home,
+                name: "__pycache__",
+                sibling: None,
+                max_depth: 9,
+            },
+            Risk::Safe,
+            false,
+        ),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +161,7 @@ fn platform_categories() -> Vec<Category> {
             "user_caches",
             "Application Caches",
             "~/Library/Caches — app, browser, Homebrew, pip & yarn caches.",
-            home(&["Library", "Caches"]),
+            Source::Contents(home(&["Library", "Caches"])),
             Risk::Safe,
             true,
         ),
@@ -101,7 +169,7 @@ fn platform_categories() -> Vec<Category> {
             "app_logs",
             "Application Logs",
             "~/Library/Logs — diagnostic logs written by apps.",
-            home(&["Library", "Logs"]),
+            Source::Contents(home(&["Library", "Logs"])),
             Risk::Safe,
             true,
         ),
@@ -109,7 +177,7 @@ fn platform_categories() -> Vec<Category> {
             "temp_files",
             "Temporary Files",
             "Per-user temp directory ($TMPDIR).",
-            vec![std::env::temp_dir()],
+            Source::Contents(vec![std::env::temp_dir()]),
             Risk::Safe,
             true,
         ),
@@ -117,7 +185,7 @@ fn platform_categories() -> Vec<Category> {
             "xcode_derived",
             "Xcode Derived Data",
             "Build intermediates & indexes. Rebuilt on next build.",
-            home(&["Library", "Developer", "Xcode", "DerivedData"]),
+            Source::Contents(home(&["Library", "Developer", "Xcode", "DerivedData"])),
             Risk::Safe,
             true,
         ),
@@ -125,7 +193,7 @@ fn platform_categories() -> Vec<Category> {
             "xcode_device_support",
             "Xcode Device Support",
             "Symbols cached per connected device/OS. Re-fetched when needed.",
-            device_support,
+            Source::Contents(device_support),
             Risk::Safe,
             true,
         ),
@@ -133,7 +201,7 @@ fn platform_categories() -> Vec<Category> {
             "simulator_caches",
             "iOS Simulator Caches",
             "CoreSimulator caches.",
-            home(&["Library", "Developer", "CoreSimulator", "Caches"]),
+            Source::Contents(home(&["Library", "Developer", "CoreSimulator", "Caches"])),
             Risk::Safe,
             true,
         ),
@@ -141,7 +209,7 @@ fn platform_categories() -> Vec<Category> {
             "npm_cache",
             "npm Cache",
             "~/.npm/_cacache — re-downloaded on demand.",
-            home(&[".npm", "_cacache"]),
+            Source::Contents(home(&[".npm", "_cacache"])),
             Risk::Safe,
             true,
         ),
@@ -149,7 +217,7 @@ fn platform_categories() -> Vec<Category> {
             "cargo_cache",
             "Cargo Registry Cache",
             "~/.cargo/registry/cache — downloaded crate archives.",
-            home(&[".cargo", "registry", "cache"]),
+            Source::Contents(home(&[".cargo", "registry", "cache"])),
             Risk::Safe,
             true,
         ),
@@ -157,7 +225,7 @@ fn platform_categories() -> Vec<Category> {
             "trash",
             "Trash",
             "~/.Trash — emptying is irreversible.",
-            home(&[".Trash"]),
+            Source::Contents(home(&[".Trash"])),
             Risk::Caution,
             false,
         ),
@@ -187,7 +255,7 @@ fn platform_categories() -> Vec<Category> {
             "user_temp",
             "User Temp Files",
             "%LOCALAPPDATA%\\Temp — per-user scratch files.",
-            local(&["Temp"]),
+            Source::Contents(local(&["Temp"])),
             Risk::Safe,
             true,
         ),
@@ -195,7 +263,7 @@ fn platform_categories() -> Vec<Category> {
             "windows_temp",
             "Windows Temp Files",
             "C:\\Windows\\Temp — system scratch files (some may be in use).",
-            windows_temp,
+            Source::Contents(windows_temp),
             Risk::Safe,
             true,
         ),
@@ -203,7 +271,7 @@ fn platform_categories() -> Vec<Category> {
             "crash_dumps",
             "Crash Dumps",
             "%LOCALAPPDATA%\\CrashDumps — saved crash reports.",
-            local(&["CrashDumps"]),
+            Source::Contents(local(&["CrashDumps"])),
             Risk::Safe,
             true,
         ),
@@ -211,7 +279,7 @@ fn platform_categories() -> Vec<Category> {
             "browser_caches",
             "Browser Caches",
             "Chrome & Edge on-disk caches. Bookmarks/history untouched.",
-            browser,
+            Source::Contents(browser),
             Risk::Safe,
             true,
         ),
@@ -219,7 +287,7 @@ fn platform_categories() -> Vec<Category> {
             "npm_cache",
             "npm Cache",
             "%LOCALAPPDATA%\\npm-cache — re-downloaded on demand.",
-            local(&["npm-cache"]),
+            Source::Contents(local(&["npm-cache"])),
             Risk::Safe,
             true,
         ),
@@ -227,7 +295,7 @@ fn platform_categories() -> Vec<Category> {
             "pip_cache",
             "pip Cache",
             "%LOCALAPPDATA%\\pip\\Cache — downloaded Python wheels.",
-            local(&["pip", "Cache"]),
+            Source::Contents(local(&["pip", "Cache"])),
             Risk::Safe,
             true,
         ),
@@ -235,7 +303,7 @@ fn platform_categories() -> Vec<Category> {
             "cargo_cache",
             "Cargo Registry Cache",
             "~/.cargo/registry/cache — downloaded crate archives.",
-            home(&[".cargo", "registry", "cache"]),
+            Source::Contents(home(&[".cargo", "registry", "cache"])),
             Risk::Safe,
             true,
         ),
@@ -243,7 +311,7 @@ fn platform_categories() -> Vec<Category> {
             "recycle_bin",
             "Recycle Bin",
             "C:\\$Recycle.Bin — emptying is irreversible.",
-            vec![PathBuf::from("C:\\$Recycle.Bin")],
+            Source::Contents(vec![PathBuf::from("C:\\$Recycle.Bin")]),
             Risk::Caution,
             false,
         ),
@@ -251,7 +319,7 @@ fn platform_categories() -> Vec<Category> {
 }
 
 // ---------------------------------------------------------------------------
-// Linux / other (lets the app build & run on dev machines too)
+// Linux / other
 // ---------------------------------------------------------------------------
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_categories() -> Vec<Category> {
@@ -265,7 +333,7 @@ fn platform_categories() -> Vec<Category> {
             "user_caches",
             "Application Caches",
             "~/.cache — app caches.",
-            user_cache,
+            Source::Contents(user_cache),
             Risk::Safe,
             true,
         ),
@@ -273,7 +341,7 @@ fn platform_categories() -> Vec<Category> {
             "temp_files",
             "Temporary Files",
             "Per-user temp directory.",
-            vec![std::env::temp_dir()],
+            Source::Contents(vec![std::env::temp_dir()]),
             Risk::Safe,
             true,
         ),
@@ -281,7 +349,7 @@ fn platform_categories() -> Vec<Category> {
             "npm_cache",
             "npm Cache",
             "~/.npm/_cacache — re-downloaded on demand.",
-            home(&[".npm", "_cacache"]),
+            Source::Contents(home(&[".npm", "_cacache"])),
             Risk::Safe,
             true,
         ),
@@ -289,7 +357,7 @@ fn platform_categories() -> Vec<Category> {
             "cargo_cache",
             "Cargo Registry Cache",
             "~/.cargo/registry/cache — downloaded crate archives.",
-            home(&[".cargo", "registry", "cache"]),
+            Source::Contents(home(&[".cargo", "registry", "cache"])),
             Risk::Safe,
             true,
         ),
@@ -297,7 +365,7 @@ fn platform_categories() -> Vec<Category> {
             "trash",
             "Trash",
             "~/.local/share/Trash — emptying is irreversible.",
-            home(&[".local", "share", "Trash", "files"]),
+            Source::Contents(home(&[".local", "share", "Trash", "files"])),
             Risk::Caution,
             false,
         ),

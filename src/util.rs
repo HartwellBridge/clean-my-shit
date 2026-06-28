@@ -1,5 +1,17 @@
 //! Small formatting helpers.
 
+use std::path::Path;
+
+/// Path with the home directory collapsed to `~`, for compact display.
+pub fn short_path(path: &Path) -> String {
+    if let Some(home) = dirs::home_dir() {
+        if let Ok(rest) = path.strip_prefix(&home) {
+            return format!("~/{}", rest.display());
+        }
+    }
+    path.display().to_string()
+}
+
 /// Human-readable byte size, e.g. `1.4 GB`.
 pub fn format_size(bytes: u64) -> String {
     const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
