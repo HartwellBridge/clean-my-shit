@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4F8DF5"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7E4A1B"/>
+      <stop offset="0.45" stop-color="#C68A4A"/>
+      <stop offset="1" stop-color="#6F4118"/>
+    </linearGradient>
+    <linearGradient id="straw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAD877"/>
+      <stop offset="1" stop-color="#DBA033"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background tile -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+
+  <!-- sparkles (not rotated) -->
+  <g fill="#FFFFFF">
+    <path d="M742,322 Q742,360 780,360 Q742,360 742,398 Q742,360 704,360 Q742,360 742,322 Z" opacity="0.92"/>
+    <path d="M318,304 Q318,330 344,330 Q318,330 318,356 Q318,330 292,330 Q318,330 318,304 Z" opacity="0.85"/>
+    <path d="M688,648 Q688,666 706,666 Q688,666 688,684 Q688,666 670,666 Q688,666 688,648 Z" opacity="0.8"/>
+  </g>
+
+  <!-- broom -->
+  <g transform="rotate(-30 512 512)">
+    <!-- handle -->
+    <rect x="489" y="150" width="46" height="416" rx="23" fill="url(#wood)"/>
+    <rect x="500" y="164" width="9" height="388" rx="4.5" fill="#E6B574" opacity="0.6"/>
+
+    <!-- brush body -->
+    <path d="M470,576 L554,576 L648,860 Q512,902 376,860 Z" fill="url(#straw)"/>
+
+    <!-- bristle separators -->
+    <g stroke="#C68A34" stroke-width="5" stroke-linecap="round" opacity="0.5">
+      <line x1="478" y1="598" x2="392" y2="864"/>
+      <line x1="489" y1="598" x2="432" y2="864"/>
+      <line x1="501" y1="598" x2="472" y2="864"/>
+      <line x1="512" y1="598" x2="512" y2="864"/>
+      <line x1="523" y1="598" x2="552" y2="864"/>
+      <line x1="535" y1="598" x2="592" y2="864"/>
+      <line x1="546" y1="598" x2="632" y2="864"/>
+    </g>
+
+    <!-- worn tips (darker band along the sweeping edge) -->
+    <path d="M392,818 Q512,850 632,818 L648,860 Q512,902 376,860 Z" fill="#C5852A" opacity="0.5"/>
+
+    <!-- binding at the neck -->
+    <rect x="458" y="548" width="108" height="44" rx="13" fill="#6F4220"/>
+    <rect x="458" y="560" width="108" height="5" rx="2.5" fill="#9A6531"/>
+    <rect x="458" y="575" width="108" height="5" rx="2.5" fill="#9A6531"/>
+  </g>
+</svg>

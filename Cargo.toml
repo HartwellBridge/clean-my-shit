@@ -1,0 +1,27 @@
+[package]
+name = "clean-my-shit"
+version = "0.1.0"
+edition = "2021"
+description = "Cross-platform disk clutter cleaner. Scan, pick, free space. No daemon."
+license = "MIT"
+
+[[bin]]
+name = "clean-my-shit"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.29"
+walkdir = "2"
+rayon = "1"
+dirs = "5"
+
+# Windows-only: embeds the app icon into the .exe at build time.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

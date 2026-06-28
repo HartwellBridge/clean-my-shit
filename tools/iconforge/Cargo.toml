@@ -1,0 +1,12 @@
+[package]
+name = "iconforge"
+version = "0.1.0"
+edition = "2021"
+description = "Renders the Clean My Shit app icon (PNG + ICO) from an SVG."
+
+# Standalone — not part of the app workspace, never linked into the app binary.
+[workspace]
+
+[dependencies]
+resvg = "0.44"
+ico = "0.3"

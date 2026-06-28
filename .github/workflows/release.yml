@@ -1,0 +1,84 @@
+name: build-installers
+
+# Builds the macOS .app/.dmg and the Windows installer on real runners.
+# When the matching secrets are present the artifacts are code-signed (and the
+# macOS build is notarized + stapled). Without secrets, unsigned builds are
+# produced — the signing steps self-skip.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    # Job-level env so the secrets are visible both to `if:` conditions and to
+    # the signing scripts.
+    env:
+      DEVELOPER_ID_APP: ${{ secrets.DEVELOPER_ID_APP }}
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build .app and .dmg
+        run: |
+          chmod +x packaging/macos/*.sh
+          ./packaging/macos/bundle.sh
+
+      - name: Import signing certificate
+        if: ${{ env.MACOS_CERT_P12 != '' }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p actions "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p actions "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Sign, notarize & staple
+        if: ${{ env.DEVELOPER_ID_APP != '' }}
+        run: ./packaging/macos/sign_and_notarize.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clean-my-shit-macos
+          path: dist/clean-my-shit.dmg
+
+  windows:
+    runs-on: windows-latest
+    env:
+      WINDOWS_CERT_P12: ${{ secrets.WINDOWS_CERT_P12 }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Decode signing certificate
+        if: ${{ env.WINDOWS_CERT_P12 != '' }}
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERT_P12)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", $bytes)
+          "WINDOWS_CERT_PFX=$env:RUNNER_TEMP\cert.pfx" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build installer
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File packaging/windows/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clean-my-shit-windows
+          path: dist/CleanMyShit-Setup.exe
