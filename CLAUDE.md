@@ -3,7 +3,7 @@
 Cross-platform (macOS + Windows) disk-clutter cleaner. Rust + egui GUI. Free.
 No daemon: launch, scan, pick, clean, quit.
 
-- Repo: https://github.com/frank10gm/clean-my-shit
+- Repo: https://github.com/HartwellBridge/clean-my-shit
 - Location: `~/workspace/hw/clean-my-shit`
 - Website/product page lives in a **separate repo** — see "Website integration".
 
@@ -121,7 +121,7 @@ External links/config:
 - Stripe donate link `https://donate.stripe.com/3cIbJ1cQlci7eou9cxg3600`, wired via
   `NEXT_PUBLIC_STRIPE_DONATE_URL` in `.env` + `.env.production`. Set the Stripe
   Payment Link's "after payment" redirect to `…/en/clean-my-shit/thanks`.
-- `GITHUB_URL` = https://github.com/frank10gm/clean-my-shit.
+- `GITHUB_URL` = https://github.com/HartwellBridge/clean-my-shit.
 
 ## Open items / TODO
 

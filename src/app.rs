@@ -279,7 +279,7 @@ const GITHUB_COLOR: egui::Color32 = egui::Color32::from_rgb(0x30, 0x36, 0x3d);
 const SUPPORT_URL: &str = "https://hartwellbridge.com/en/clean-my-shit#support";
 
 /// The project's GitHub repository.
-const GITHUB_URL: &str = "https://github.com/frank10gm/clean-my-shit";
+const GITHUB_URL: &str = "https://github.com/HartwellBridge/clean-my-shit";
 
 /// A filled button that opens `url` in the browser.
 fn link_button(ui: &mut egui::Ui, label: &str, url: &str, fill: egui::Color32, big: bool) {
